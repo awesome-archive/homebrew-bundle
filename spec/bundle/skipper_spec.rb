@@ -12,7 +12,7 @@ describe Bundle::Skipper do
     skipper.instance_variable_set(:@skipped_entries, nil)
   end
 
-  context ".skip?" do
+  describe ".skip?" do
     context "with a listed formula" do
       let(:entry) { Bundle::Dsl::Entry.new(:brew, "mysql") }
 
@@ -21,7 +21,7 @@ describe Bundle::Skipper do
       end
     end
 
-    context "with an unlisted cask" do
+    context "with an unlisted cask", :needs_macos do
       let(:entry) { Bundle::Dsl::Entry.new(:cask, "java") }
 
       it "returns false" do

@@ -5,24 +5,25 @@ require "utils/formatter"
 module Bundle
   module Commands
     # TODO: refactor into multiple modules
-    module Cleanup # rubocop:disable Metrics/ModuleLength
+    module Cleanup
       module_function
 
       def reset!
         @dsl = nil
+        @kept_casks = nil
         Bundle::CaskDumper.reset!
         Bundle::BrewDumper.reset!
         Bundle::TapDumper.reset!
         Bundle::BrewServices.reset!
       end
 
-      def run
-        casks = casks_to_uninstall
-        formulae = formulae_to_uninstall
-        taps = taps_to_untap
-        if ARGV.force?
+      def run(global: false, file: nil, force: false, zap: false)
+        casks = casks_to_uninstall(global: global, file: file)
+        formulae = formulae_to_uninstall(global: global, file: file)
+        taps = taps_to_untap(global: global, file: file)
+        if force
           if casks.any?
-            action = if ARGV.include?("--zap")
+            action = if zap
               "zap"
             else
               "uninstall"
@@ -40,9 +41,7 @@ module Bundle
           Kernel.system "brew", "untap", *taps if taps.any?
 
           cleanup = system_output_no_stderr("brew", "cleanup")
-          unless cleanup.empty?
-            puts cleanup
-          end
+          puts cleanup unless cleanup.empty?
         else
           if casks.any?
             puts "Would uninstall casks:"
@@ -61,22 +60,21 @@ module Bundle
 
           cleanup = system_output_no_stderr("brew", "cleanup", "--dry-run")
           unless cleanup.empty?
-            puts "Would 'brew cleanup':"
+            puts "Would `brew cleanup`:"
             puts cleanup
           end
         end
       end
 
-      def casks_to_uninstall
-        @dsl ||= Bundle::Dsl.new(Brewfile.read)
-        kept_casks = @dsl.entries.select { |e| e.type == :cask }.map(&:name)
-        current_casks = Bundle::CaskDumper.casks
-        current_casks - kept_casks
+      def casks_to_uninstall(global: false, file: nil)
+        Bundle::CaskDumper.casks - kept_casks(global: global, file: file)
       end
 
-      def formulae_to_uninstall
-        @dsl ||= Bundle::Dsl.new(Brewfile.read)
+      def formulae_to_uninstall(global: false, file: nil)
+        @dsl ||= Bundle::Dsl.new(Brewfile.read(global: global, file: file))
         kept_formulae = @dsl.entries.select { |e| e.type == :brew }.map(&:name)
+        kept_cask_formula_dependencies = Bundle::CaskDumper.formula_dependencies(kept_casks)
+        kept_formulae += kept_cask_formula_dependencies
         kept_formulae.map! do |f|
           Bundle::BrewDumper.formula_aliases[f] ||
             Bundle::BrewDumper.formula_oldnames[f] ||
@@ -89,6 +87,13 @@ module Bundle
           Bundle::BrewInstaller.formula_in_array?(f[:full_name], kept_formulae)
         end
         current_formulae.map { |f| f[:full_name] }
+      end
+
+      def kept_casks(global: false, file: nil)
+        return @kept_casks if @kept_casks
+
+        @dsl ||= Bundle::Dsl.new(Brewfile.read(global: global, file: file))
+        @kept_casks = @dsl.entries.select { |e| e.type == :cask }.map(&:name)
       end
 
       def recursive_dependencies(current_formulae, formulae_names, top_level = true)
@@ -119,8 +124,8 @@ module Bundle
 
       IGNORED_TAPS = %w[homebrew/core homebrew/bundle].freeze
 
-      def taps_to_untap
-        @dsl ||= Bundle::Dsl.new(Brewfile.read)
+      def taps_to_untap(global: false, file: nil)
+        @dsl ||= Bundle::Dsl.new(Brewfile.read(global: global, file: file))
         kept_taps = @dsl.entries.select { |e| e.type == :tap }.map(&:name)
         current_taps = Bundle::TapDumper.tap_names
         current_taps - kept_taps - IGNORED_TAPS

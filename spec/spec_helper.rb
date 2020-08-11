@@ -1,38 +1,44 @@
 # frozen_string_literal: true
 
-require "simplecov"
-SimpleCov.start do
-  add_filter "/test/"
-  add_filter "/vendor/"
-  minimum_coverage 100
+def macos?
+  RUBY_PLATFORM[/darwin/]
 end
 
-PROJECT_ROOT ||= File.expand_path("..", __dir__)
-STUB_PATH ||= File.expand_path(File.join(__FILE__, "..", "stub"))
+def linux?
+  RUBY_PLATFORM[/linux/]
+end
+
+require "simplecov"
+SimpleCov.start do
+  add_filter "/vendor/"
+  if macos?
+    minimum_coverage 100
+  else
+    minimum_coverage 97
+  end
+end
+
+PROJECT_ROOT ||= File.expand_path("..", __dir__).freeze
+STUB_PATH ||= File.expand_path(File.join(__FILE__, "..", "stub")).freeze
 $LOAD_PATH.unshift(STUB_PATH)
 
+require "os"
 require "global"
 require "bundle"
+require "active_support/core_ext/object/blank"
 
-Dir.glob("#{PROJECT_ROOT}/lib/**/*.rb").each { |f| require f }
+Dir.glob("#{PROJECT_ROOT}/lib/**/*.rb").sort.each do |file|
+  next if file.include?("/extend/os/")
+
+  require file
+end
 
 formatters = [SimpleCov::Formatter::HTMLFormatter]
 
-# Coveralls in Azure Pipelines
-if ENV["COVERALLS_REPO_TOKEN"] && ENV["TF_BUILD"]
-  require "coveralls"
+if macos? && ENV["CODECOV_TOKEN"]
+  require "codecov"
 
-  formatters << Coveralls::SimpleCov::Formatter
-
-  ENV["CI"] = "1"
-  ENV["CI_NAME"] = "azure-pipelines"
-  ENV["CI_BUILD_NUMBER"] = ENV["BUILD_BUILDID"]
-  ENV["CI_BUILD_URL"] = "#{ENV["SYSTEM_TEAMFOUNDATIONSERVERURI"]}#{ENV["SYSTEM_TEAMPROJECT"]}/_build/results?buildId=#{ENV["BUILD_BUILDID"]}"
-  ENV["CI_BRANCH"] = ENV["BUILD_SOURCEBRANCH"]
-  ENV["CI_PULL_REQUEST"] = ENV["SYSTEM_PULLREQUEST_PULLREQUESTNUMBER"]
-
-  require "simplecov-cobertura"
-  formatters << SimpleCov::Formatter::CoberturaFormatter
+  formatters << SimpleCov::Formatter::Codecov
 end
 
 SimpleCov.formatters = SimpleCov::Formatter::MultiFormatter.new(formatters)
@@ -51,5 +57,13 @@ RSpec.configure do |config|
 
   config.around do |example|
     Bundler.with_clean_env { example.run }
+  end
+
+  config.before(:each, :needs_linux) do
+    skip "Not on Linux." unless linux?
+  end
+
+  config.before(:each, :needs_macos) do
+    skip "Not on macOS." unless macos?
   end
 end

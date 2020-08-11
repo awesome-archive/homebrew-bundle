@@ -1,11 +1,6 @@
 # frozen_string_literal: true
 
-# check ruby version before requiring any modules.
-RUBY_VERSION_SPLIT = RUBY_VERSION.split "."
-RUBY_X = RUBY_VERSION_SPLIT[0].to_i
-RUBY_Y = RUBY_VERSION_SPLIT[1].to_i
-TOO_OLD_RUBY = RUBY_X < 2 || (RUBY_X == 2 && RUBY_Y < 3)
-raise "Homebrew Bundle must be run under Ruby 2.3!" if TOO_OLD_RUBY
+$LOAD_PATH.unshift(File.dirname(__FILE__))
 
 require "bundle/brewfile"
 require "bundle/bundle"
@@ -29,9 +24,12 @@ require "bundle/tap_checker"
 require "bundle/dumper"
 require "bundle/installer"
 require "bundle/lister"
+require "bundle/locker"
 require "bundle/commands/install"
 require "bundle/commands/dump"
 require "bundle/commands/cleanup"
 require "bundle/commands/check"
 require "bundle/commands/exec"
 require "bundle/commands/list"
+require "bundle/whalebrew_installer"
+require "bundle/whalebrew_dumper"

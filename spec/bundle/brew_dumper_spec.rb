@@ -232,7 +232,8 @@ describe Bundle::BrewDumper do
     end
 
     it "dumps as foo and bar with args and link" do
-      expect(dumper.dump).to eql("brew \"bar\", args: [\"with-a\", \"with-b\"], link: false\nbrew \"homebrew/tap/foo\"")
+      expect(dumper.dump).to \
+        eql("brew \"bar\", args: [\"with-a\", \"with-b\"], link: false\nbrew \"homebrew/tap/foo\"")
     end
 
     it "formula_info returns the formula" do
@@ -489,9 +490,10 @@ describe Bundle::BrewDumper do
     end
   end
 
-  context "when --describe is not set" do
+  context "when `describe` is false" do
+    subject(:dump) { described_class.dump(describe: false) }
+
     before do
-      stub_const("ARGV", [])
       described_class.reset!
       allow(described_class).to receive(:formulae_info).and_return [
         {
@@ -529,13 +531,14 @@ describe Bundle::BrewDumper do
     end
 
     it "does not output a comment with dependency description" do
-      expect(described_class.dump).not_to include("#")
+      expect(dump).not_to include("#")
     end
   end
 
-  context "when --describe is set" do
+  context "when `describe` is true" do
+    subject(:dump) { described_class.dump(describe: true) }
+
     before do
-      stub_const("ARGV", ["--describe"])
       described_class.reset!
       allow(described_class).to receive(:formulae_info).and_return [
         {
@@ -546,6 +549,22 @@ describe Bundle::BrewDumper do
           args:                     [],
           version:                  "1.0",
           dependencies:             ["b", "d", "c"],
+          recommended_dependencies: [],
+          optional_dependencies:    [],
+          build_dependencies:       [],
+          requirements:             [],
+          conflicts_with:           [],
+          pinned?:                  false,
+          outdated?:                false,
+        },
+        {
+          name:                     "q",
+          full_name:                "q",
+          desc:                     "q\nq",
+          aliases:                  [],
+          args:                     [],
+          version:                  "1.0",
+          dependencies:             ["a", "b"],
           recommended_dependencies: [],
           optional_dependencies:    [],
           build_dependencies:       [],
@@ -573,12 +592,16 @@ describe Bundle::BrewDumper do
     end
 
     it "outputs a comment on the line before a dependency with a description" do
-      expect(described_class.dump).to include("# z")
+      expect(dump).to include("# z")
+    end
+
+    it "outputs a comment for each line in the formula's desc before a dependency with a description" do
+      expect(dump).to include("# q\n# q")
     end
 
     it "does not output a comment if a formula lacks a description" do
-      lines_with_comments = described_class.dump.split.select { |line| line.include?("#") }
-      expect(lines_with_comments.size).to eq(1)
+      lines_with_comments = dump.split.select { |line| line.include?("#") }
+      expect(lines_with_comments.size).to eq(3)
     end
   end
 
@@ -631,11 +654,11 @@ describe Bundle::BrewDumper do
       expect(described_class.dump).not_to include('brew "b", restart_service: true')
     end
 
-    context "when --no-restart is set" do
-      before { stub_const("ARGV", ["--no-restart"]) }
+    context "when `no_restart` is true" do
+      subject(:dump) { described_class.dump(no_restart: true) }
 
       it "does not add a restart_service bit if the service is running" do
-        expect(described_class.dump).not_to include("restart_service")
+        expect(dump).not_to include("restart_service")
       end
     end
   end
@@ -689,7 +712,7 @@ describe Bundle::BrewDumper do
     end
   end
 
-  context "#formula_oldnames" do
+  describe "#formula_oldnames" do
     before do
       described_class.reset!
       formula_info = [{
@@ -716,7 +739,7 @@ describe Bundle::BrewDumper do
     end
   end
 
-  context "#formula_info" do
+  describe "#formula_info" do
     it "handles formula syntax errors" do
       allow(Formula).to receive(:[]).and_raise(NoMethodError)
       expect(described_class).to receive(:opoo).once
@@ -725,7 +748,7 @@ describe Bundle::BrewDumper do
     end
   end
 
-  context "#formulae_info" do
+  describe "#formulae_info" do
     it "handles formula syntax errors" do
       allow(Formula).to receive(:installed).and_raise(NoMethodError)
       expect(described_class).to receive(:opoo).once
@@ -733,7 +756,7 @@ describe Bundle::BrewDumper do
     end
   end
 
-  context "#formula_hash" do
+  describe "#formula_hash" do
     let(:f) { OpenStruct.new }
 
     it "handles formula syntax errors" do

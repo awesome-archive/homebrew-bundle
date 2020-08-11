@@ -5,7 +5,7 @@ require "tsort"
 
 module Bundle
   # TODO: refactor into multiple modules
-  module BrewDumper # rubocop:disable Metrics/ModuleLength
+  module BrewDumper
     module_function
 
     def reset!
@@ -22,22 +22,24 @@ module Bundle
       end
     end
 
-    def dump
+    def dump(describe: false, no_restart: false)
       requested_formula = formulae.select do |f|
         f[:installed_on_request?] || !f[:installed_as_dependency?]
       end
       requested_formula.map do |f|
         brewline = ""
-        brewline += "# #{f[:desc]}\n" if ARGV.include?("--describe") && f[:desc]
+        brewline += desc_comment(f[:desc]) if describe && f[:desc]
         brewline += "brew \"#{f[:full_name]}\""
         args = f[:args].map { |arg| "\"#{arg}\"" }.sort.join(", ")
         brewline += ", args: [#{args}]" unless f[:args].empty?
-        if !ARGV.include?("--no-restart") && BrewServices.started?(f[:full_name])
-          brewline += ", restart_service: true"
-        end
+        brewline += ", restart_service: true" if !no_restart && BrewServices.started?(f[:full_name])
         brewline += ", link: #{f[:link?]}" unless f[:link?].nil?
         brewline
       end.join("\n")
+    end
+
+    def desc_comment(desc)
+      desc.split("\n").map { |s| "# #{s}\n" }.join
     end
 
     def cask_requirements
@@ -128,7 +130,7 @@ module Bundle
       end
 
       if keg
-        args = keg["used_options"].to_a.map { |option| option.gsub(/^--/, "") }
+        args = keg["used_options"].to_a.map { |option| option.delete_prefix("--") }
         args << "HEAD" if keg["version"].to_s.start_with?("HEAD")
         args << "devel" if keg["version"].to_s.gsub(/_\d+$/, "") == formula["versions"]["devel"]
         args.uniq!
@@ -136,7 +138,7 @@ module Bundle
         installed_as_dependency = keg["installed_as_dependency"] || false
         installed_on_request = keg["installed_on_request"] || false
         poured_from_bottle = keg["poured_from_bottle"] || false
-        runtime_dependencies = if deps = keg["runtime_dependencies"]
+        runtime_dependencies = if (deps = keg["runtime_dependencies"])
           deps.map do |dep|
             full_name = dep["full_name"]
             next unless full_name

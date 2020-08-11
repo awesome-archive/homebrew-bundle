@@ -24,11 +24,15 @@ class Formula
     false
   end
 
-  def installed?
+  def any_version_installed?
     true
   end
 
   def self.installed
     []
+  end
+
+  def self.[](name)
+    new(name)
   end
 end
